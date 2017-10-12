@@ -1,6 +1,6 @@
 ## coinmarketcap-slack-notifier
 
-#### coinmarketcap-slack-notifier is an BSD licensed library written in Python providing an easy to use slack bot which sends notifications about changes on coinmarketcap to the slack channel. This library has been tested with Python 2.7.x
+#### coinmarketcap-slack-notifier is an BSD licensed library written in Python providing an easy to use slack bot which sends notifications about changes on coinmarketcap to the `slack` channel(also, you can duplicate your messages to `discord` channel via webhook). This library has been tested with Python 2.7.x
 
 ### Installation
 
@@ -24,7 +24,8 @@ export NOTIFIER_SETTINGS=/your_custom_path/notifier_settings.py
 #notifier_settings.py
 STORED_COINS_FILE_PATH = your_path_where_will_be_stored_json_file_with_coins
 SLACK_CHANNEL = name_of_your_slack_channel
-SLACK_WEBHOOK_URL = your_webhook_url
+SLACK_WEBHOOK_URL = your_slack_webhook_url
+DISCORD_WEBHOOK_URL = your_discord_webhook_url
 
 
 OBSERVABLE_COINS = [

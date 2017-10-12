@@ -141,7 +141,10 @@ class Notifier(object):
 
     def send_notification(self, currency_data):
         attachments = self._get_attachments(currency_data)
-        requests.post(settings.SLACK_WEBHOOK_URL, json=self._get_request_data(attachments))
+        request_data = self._get_request_data(attachments)
+        for webhook_url in (settings.SLACK_WEBHOOK_URL, settings.DISCORD_WEBHOOK_URL):
+            if webhook_url is not NotImplemented:
+                requests.post(webhook_url, json=request_data)
 
 
 class AppRunner(object):
