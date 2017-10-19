@@ -5,12 +5,13 @@ from decimal import Decimal
 import requests
 
 from coinmarketcap_slack_notifier import settings
-from coinmarketcap_slack_notifier.utils import StoredCoin, ObservableCoin, CoinDoesNotExist, ChangedCoin, json_dumps
+from coinmarketcap_slack_notifier.utils import (StoredCoin, ObservableCoin, CoinDoesNotExist, ChangedCoin, json_dumps,
+                                                AttachmentData, ValueWasNotChanged)
 
 
 class CoinManager(object):
 
-    REQUIRED_COIN_FIELDS = ('id', 'price_usd', 'price_btc', 'percent')
+    REQUIRED_COIN_FIELDS = ('id', 'price_usd', 'price_btc', 'total_supply')
 
     def __init__(self):
         self.stored_coins = self._get_stored_coins()
@@ -27,6 +28,7 @@ class CoinManager(object):
                     data = json.loads(coin)
                     stored_coin = StoredCoin(id=data['id'], price_usd=Decimal(str(data['price_usd'])),
                                              price_btc=Decimal(str(data['price_btc'])),
+                                             total_supply=Decimal(str(data['total_supply'])),
                                              percent=Decimal(str(data['percent'])))
                     stored_coins.append(stored_coin)
         return stored_coins
@@ -70,11 +72,11 @@ class CoinManager(object):
         validated_currencies = []
         for currency in current_currencies:
             if all(currency[key] is not None for key in self.REQUIRED_COIN_FIELDS):
-                validated_currencies.append(validated_currencies)
+                validated_currencies.append(currency)
         return validated_currencies
 
-    def calculate_percent_changes(self, old_price_usd, new_price_usd):
-        return (abs(new_price_usd - old_price_usd) / old_price_usd * 100).quantize(Decimal('0.1'))
+    def calculate_percent_changes(self, old_value, new_value):
+        return (abs(new_value - old_value) / old_value * 100).quantize(settings.QUANTIZE_PERCENT_AND_PRICE)
 
     def get_stored_coin(self, coin_id):
         return self._get_coin(coin_id, self.stored_coins)
@@ -87,7 +89,8 @@ class CoinManager(object):
         for current_currency in current_currencies:
             changed_coin = ChangedCoin(
                 id=current_currency['id'], price_usd=Decimal(current_currency['price_usd']),
-                price_btc=Decimal(current_currency['price_btc']))
+                price_btc=Decimal(current_currency['price_btc']),
+                total_supply=Decimal(current_currency['total_supply']))
 
             if self._has_currency_changed(changed_coin):
                 changed_coins.append(changed_coin)
@@ -99,7 +102,8 @@ class CoinManager(object):
             for currency in currencies:
                 potential_stored_coin = StoredCoin(
                     id=currency['id'], price_usd=Decimal(currency['price_usd']),
-                    price_btc=Decimal(currency['price_btc']), percent=None)
+                    price_btc=Decimal(currency['price_btc']), total_supply=Decimal(currency['total_supply']),
+                    percent=None)
 
                 currency_id = potential_stored_coin.id
                 if currency_id in self.observable_coin_ids:
@@ -107,6 +111,7 @@ class CoinManager(object):
                     if self._has_currency_changed(potential_stored_coin) or currency_id not in self.stored_coin_ids:
                         currency_price_usd = potential_stored_coin.price_usd
                         currency_price_btc = potential_stored_coin.price_btc
+                        currency_total_supply = potential_stored_coin.total_supply
                         currency_percent = observable_coin.percent
 
                     else:
@@ -114,53 +119,49 @@ class CoinManager(object):
                         if stored_coin.percent == observable_coin.percent:
                             currency_price_usd = stored_coin.price_usd
                             currency_price_btc = stored_coin.price_btc
+                            currency_total_supply = stored_coin.total_supply
                             currency_percent = stored_coin.percent
                         else:
                             currency_price_usd = potential_stored_coin.price_usd
                             currency_price_btc = potential_stored_coin.price_btc
+                            currency_total_supply = potential_stored_coin.total_supply
                             currency_percent = observable_coin.percent
 
                     fout.write(json_dumps({
                         'id': currency_id, 'price_usd': currency_price_usd, 'price_btc': currency_price_btc,
-                        'percent': currency_percent}) + '\n')
+                        'total_supply': currency_total_supply, 'percent': currency_percent}) + '\n')
 
 
 class Notifier(object):
 
     ATTACHMENT_TITLE_TEMPLATE = '{coin_id} {action} {percent}%'
-    ATTACHMENT_TEXT_TEMPLATE = '_current price_ {price_btc}BTC, ${price_usd}'
+    ATTACHMENT_MAIN_TEXT_TEMPLATE = '_current price_ {price_btc:,}BTC, ${price_usd:,}'
+    ATTACHMENT_TOTAL_SUPPLY_TEXT_TEMPLATE = '\n_market cap_ {action} {coin_amount_change:,}, {btc_percent_change}%'
 
-    def _get_action(self, old_price_usd, new_price_usd):
-        if old_price_usd > new_price_usd:
-            return 'has fallen'
-        elif old_price_usd < new_price_usd:
-            return 'has risen'
-        else:
-            raise ValueError('Price was not changed')
-
-    def _get_attachment(self, observable_coin, action, new_price_usd, new_price_btc, percent):
+    def _get_attachment(self, attachment_data):
+        title_link = 'https://coinmarketcap.com/currencies/{coin_id}/'.format(
+            coin_id=attachment_data.observable_coin.id)
         title = self.ATTACHMENT_TITLE_TEMPLATE.format(
-            coin_id=observable_coin.id.capitalize(), action=action, percent=percent)
+            coin_id=attachment_data.observable_coin.id.capitalize(),
+            action=attachment_data.coin_price_action, percent=attachment_data.price_percent_change)
+        text = self.ATTACHMENT_MAIN_TEXT_TEMPLATE.format(price_btc=attachment_data.new_price_btc,
+                                                         price_usd=attachment_data.new_price_usd)
+
+        if attachment_data.coin_total_supply_action is not None:
+            total_supply_text = self.ATTACHMENT_TOTAL_SUPPLY_TEXT_TEMPLATE.format(
+                action=attachment_data.coin_total_supply_action, coin_amount_change=attachment_data.coin_amount_change,
+                btc_percent_change=attachment_data.btc_percent_change)
+            text += total_supply_text
 
         attachment = {
-            'pretext': '*{coin_id}*'.format(coin_id=observable_coin.id.capitalize()),
             'title': title,
-            'text': self.ATTACHMENT_TEXT_TEMPLATE.format(price_btc=new_price_btc, price_usd=new_price_usd),
-            'thumb_url': observable_coin.icon_url,
-            'title_link': 'https://coinmarketcap.com/currencies/{coin_id}/'.format(coin_id=observable_coin.id),
+            'text': text,
+            'thumb_url': attachment_data.observable_coin.icon_url,
+            'title_link': title_link,
             'color': '#7CD197',
             'mrkdwn_in': ('pretext', 'text')
         }
         return attachment
-
-    def _get_attachments(self, currency_data):
-        attachments = []
-        for observable_coin, stored_coin, changed_coin, percent in currency_data:
-            action = self._get_action(stored_coin.price_usd, changed_coin.price_usd)
-            attachment = self._get_attachment(
-                observable_coin, action, changed_coin.price_usd, changed_coin.price_btc, percent)
-            attachments.append(attachment)
-        return attachments
 
     def _get_request_data(self, attachments):
         request_data = {
@@ -171,8 +172,16 @@ class Notifier(object):
         }
         return request_data
 
-    def send_notification(self, currency_data):
-        attachments = self._get_attachments(currency_data)
+    def get_action(self, old_value, new_value):
+        if old_value > new_value:
+            return 'has fallen'
+        elif old_value < new_value:
+            return 'has risen'
+        else:
+            raise ValueWasNotChanged('Value was not changed')
+
+    def send_notification(self, attachments_data):
+        attachments = [self._get_attachment(attachment_data) for attachment_data in attachments_data]
         request_data = self._get_request_data(attachments)
         for webhook_url in (settings.SLACK_WEBHOOK_URL, settings.DISCORD_WEBHOOK_URL):
             if webhook_url is not NotImplemented:
@@ -185,20 +194,34 @@ class AppRunner(object):
         self.notifier = notifier
         self.coin_manager = coin_manager
 
-    def get_currency_data(self, changed_coins):
-        currency_data = []
-        for changed_coin in changed_coins:
-            changed_currency_id = changed_coin.id
-            observable_coin = self.coin_manager.get_observable_coin(changed_currency_id)
-            stored_coin = self.coin_manager.get_stored_coin(changed_currency_id)
-            percent = self.coin_manager.calculate_percent_changes(stored_coin.price_usd, changed_coin.price_usd)
-            currency_data.append((observable_coin, stored_coin, changed_coin, percent))
-        return currency_data
+    def get_attachment_data(self, changed_coin):
+        changed_currency_id = changed_coin.id
+        stored_coin = self.coin_manager.get_stored_coin(changed_currency_id)
+        try:
+            coin_total_supply_action = self.notifier.get_action(stored_coin.total_supply, changed_coin.total_supply)
+        except ValueWasNotChanged:
+            coin_total_supply_action = None
+
+        attachment_data = AttachmentData(
+            observable_coin=self.coin_manager.get_observable_coin(changed_currency_id),
+            coin_price_action=self.notifier.get_action(stored_coin.price_usd, changed_coin.price_usd),
+            coin_total_supply_action=coin_total_supply_action,
+            new_price_usd=changed_coin.price_usd,
+            new_price_btc=changed_coin.price_btc,
+            price_percent_change=self.coin_manager.calculate_percent_changes(
+                stored_coin.price_usd, changed_coin.price_usd),
+            coin_amount_change=(abs(stored_coin.total_supply - changed_coin.total_supply)
+                                .quantize(settings.QUANTIZE_PERCENT_AND_PRICE)),
+            btc_percent_change=self.coin_manager.calculate_percent_changes(
+                stored_coin.total_supply, changed_coin.total_supply))
+
+        return attachment_data
 
     def run(self):
         current_currencies = requests.get(settings.TICKER_API_URL).json()
-        changed_coins = self.coin_manager.get_changed_coins(current_currencies)
+        validated_currencies = self.coin_manager.get_validated_currencies(current_currencies)
+        changed_coins = self.coin_manager.get_changed_coins(validated_currencies)
         if changed_coins:
-            currency_data = self.get_currency_data(changed_coins)
-            self.notifier.send_notification(currency_data)
-        self.coin_manager.save_observable_currencies(current_currencies)
+            attachment_data = [self.get_attachment_data(changed_coin) for changed_coin in changed_coins]
+            self.notifier.send_notification(attachment_data)
+        self.coin_manager.save_observable_currencies(validated_currencies)

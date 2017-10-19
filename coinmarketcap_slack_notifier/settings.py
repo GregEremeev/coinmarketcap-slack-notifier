@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal
 
 
 BASE_API_URL = 'https://api.coinmarketcap.com'
@@ -22,6 +23,9 @@ SLACK_WEBHOOK_URL = NotImplemented
 DISCORD_WEBHOOK_URL = NotImplemented
 SENDER_USER_NAME = 'COINMARKETCAP_BOT'
 ICON_EMOJI = ':robot_face:'
+
+
+QUANTIZE_PERCENT_AND_PRICE = Decimal('0.00001')
 
 
 CUSTOM_SETTINGS_PATH = os.getenv('NOTIFIER_SETTINGS', '/etc/notifier_settings.py')
