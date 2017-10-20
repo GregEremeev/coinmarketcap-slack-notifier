@@ -42,3 +42,11 @@ crontab -e
 #schedule for cron
 */5 * * * * /your_path/coinmarketcap-slack-notifier/.venv/bin/python -m coinmarketcap_slack_notifier.cli run_notifier
 ```
+
+## Examples of notifications
+
+### Discord
+<img src="./discord_notification.png" width="400" height="600">
+
+### Slack
+<img src="./slack_notification.png" width="600" height="450">
