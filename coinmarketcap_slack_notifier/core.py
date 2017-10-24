@@ -11,7 +11,7 @@ from coinmarketcap_slack_notifier.utils import (StoredCoin, ObservableCoin, Coin
 
 class CoinManager(object):
 
-    REQUIRED_COIN_FIELDS = ('id', 'price_usd', 'price_btc', 'total_supply')
+    REQUIRED_COIN_FIELDS = ('id', 'price_usd', 'price_btc', 'total_supply', '24h_volume_usd')
 
     def __init__(self):
         self.stored_coins = self._get_stored_coins()
@@ -90,7 +90,8 @@ class CoinManager(object):
             changed_coin = ChangedCoin(
                 id=current_currency['id'], price_usd=Decimal(current_currency['price_usd']),
                 price_btc=Decimal(current_currency['price_btc']),
-                total_supply=Decimal(current_currency['total_supply']))
+                total_supply=Decimal(current_currency['total_supply']),
+                daily_volume=float(current_currency['24h_volume_usd']))
 
             if self._has_currency_changed(changed_coin):
                 changed_coins.append(changed_coin)
@@ -135,7 +136,8 @@ class CoinManager(object):
 class Notifier(object):
 
     ATTACHMENT_TITLE_TEMPLATE = '{coin_id} {action} {percent}%'
-    ATTACHMENT_MAIN_TEXT_TEMPLATE = '_current price_ {price_btc:,}BTC, ${price_usd:,}'
+    ATTACHMENT_MAIN_TEXT_TEMPLATE = ('_current price_ {price_btc:,}BTC, ${price_usd:,}\n'
+                                     '_24h volume_ is ${daily_volume:,}')
     ATTACHMENT_TOTAL_SUPPLY_TEXT_TEMPLATE = '\n_market cap_ {action} {coin_amount_change:,}, {btc_percent_change}%'
 
     def _get_attachment(self, attachment_data):
@@ -145,7 +147,8 @@ class Notifier(object):
             coin_id=attachment_data.observable_coin.id.capitalize(),
             action=attachment_data.coin_price_action, percent=attachment_data.price_percent_change)
         text = self.ATTACHMENT_MAIN_TEXT_TEMPLATE.format(price_btc=attachment_data.new_price_btc,
-                                                         price_usd=attachment_data.new_price_usd)
+                                                         price_usd=attachment_data.new_price_usd,
+                                                         daily_volume=attachment_data.daily_volume)
 
         if attachment_data.coin_total_supply_action is not None:
             total_supply_text = self.ATTACHMENT_TOTAL_SUPPLY_TEXT_TEMPLATE.format(
@@ -206,6 +209,7 @@ class AppRunner(object):
             observable_coin=self.coin_manager.get_observable_coin(changed_currency_id),
             coin_price_action=self.notifier.get_action(stored_coin.price_usd, changed_coin.price_usd),
             coin_total_supply_action=coin_total_supply_action,
+            daily_volume=changed_coin.daily_volume,
             new_price_usd=changed_coin.price_usd,
             new_price_btc=changed_coin.price_btc,
             price_percent_change=self.coin_manager.calculate_percent_changes(

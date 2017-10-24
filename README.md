@@ -46,7 +46,7 @@ crontab -e
 ## Examples of notifications
 
 ### Discord
-<img src="./discord_notification.png" width="400" height="600">
+<img src="./pictures/discord_notification.png" width="400" height="600">
 
 ### Slack
-<img src="./slack_notification.png" width="600" height="450">
+<img src="./pictures/slack_notification.png" width="600" height="450">

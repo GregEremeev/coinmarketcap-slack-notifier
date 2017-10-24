@@ -10,6 +10,7 @@ setup(
     author_email='budulianin@gmail.com',
     version='0.1.0',
     license='BSD',
+    url='https://github.com/Budulianin/coinmarketcap-slack-notifier',
     install_requires=requirements,
     description='Application which sends notifications about changes on coinmarketcap.com to the slack channel',
     packages=find_packages(),
