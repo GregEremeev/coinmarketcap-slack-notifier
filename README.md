@@ -23,7 +23,7 @@ export NOTIFIER_SETTINGS=/your_custom_path/notifier_settings.py
 ```bash
 #notifier_settings.py
 STORED_COINS_FILE_PATH = your_path_where_will_be_stored_json_file_with_coins
-SLACK_CHANNEL = name_of_your_slack_channel
+CHANNEL_NAME = name_of_your_slack_channel
 SLACK_WEBHOOK_URL = your_slack_webhook_url
 DISCORD_WEBHOOK_URL = your_discord_webhook_url
 
@@ -32,6 +32,11 @@ OBSERVABLE_COINS = [
     {'id': 'bitcoin', #you can choose which coins will be observable
      'icon_url': 'https://cdn3.iconfinder.com/data/icons/inficons-set-2/512/648849-star-ratings-512.png',
      'percent': 5}, #and trigger condition
+    {'id': 'litecoin',
+     'icon_url': 'https://pngimg.com/uploads/litecoin/litecoin.png',
+     'percent': 0.1,
+     'slack_channel': 'general', #separate message about litecoin will be sent to this slack channel
+     'discord_webhook_url': 'your_webhook_url'} #separate message about litecoin will be sent to this discord channel
 ]
 ```
 

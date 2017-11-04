@@ -6,7 +6,7 @@ import requests
 
 from coinmarketcap_slack_notifier import settings
 from coinmarketcap_slack_notifier.utils import (StoredCoin, ObservableCoin, CoinDoesNotExist, ChangedCoin, json_dumps,
-                                                AttachmentData, ValueWasNotChanged)
+                                                AttachmentData, ValueWasNotChanged, provide_sequence)
 
 
 class CoinManager(object):
@@ -39,7 +39,9 @@ class CoinManager(object):
         for observable_coin_kwargs in settings.OBSERVABLE_COINS:
             observable_coin = ObservableCoin(
                 id=observable_coin_kwargs['id'], icon_url=observable_coin_kwargs['icon_url'],
-                percent=Decimal(str(observable_coin_kwargs['percent'])))
+                percent=Decimal(str(observable_coin_kwargs['percent'])),
+                discord_webhook_url=observable_coin_kwargs.get('discord_webhook_url'),
+                slack_channel=observable_coin_kwargs.get('slack_channel'))
             observable_coins.append(observable_coin)
         return observable_coins
 
@@ -135,6 +137,7 @@ class CoinManager(object):
 
 class Notifier(object):
 
+    DEFAULT_WEBHOOK_URLS = (settings.SLACK_WEBHOOK_URL, settings.DISCORD_WEBHOOK_URL)
     ATTACHMENT_TITLE_TEMPLATE = '{coin_id} {action} {percent}%'
     ATTACHMENT_MAIN_TEXT_TEMPLATE = ('_current price_ {price_btc:,}BTC, ${price_usd:,}\n'
                                      '_24h volume_ is ${daily_volume:,}')
@@ -143,6 +146,7 @@ class Notifier(object):
     def _get_attachment(self, attachment_data):
         title_link = 'https://coinmarketcap.com/currencies/{coin_id}/'.format(
             coin_id=attachment_data.observable_coin.id)
+
         title = self.ATTACHMENT_TITLE_TEMPLATE.format(
             coin_id=attachment_data.observable_coin.id.capitalize(),
             action=attachment_data.coin_price_action, percent=attachment_data.price_percent_change)
@@ -166,14 +170,35 @@ class Notifier(object):
         }
         return attachment
 
-    def _get_request_data(self, attachments):
+    def _get_request_data(self, attachments, channel):
         request_data = {
-            'channel': '#' + settings.SLACK_CHANNEL,
+            'channel': '#' + channel,
             'username': settings.SENDER_USER_NAME,
             'attachments': attachments,
             'icon_emoji': settings.ICON_EMOJI,
         }
         return request_data
+
+    def _send_notification(self, attachment_data, channel_name, webhook_urls):
+        attachment = [self._get_attachment(attachment) for attachment in attachment_data]
+        request_data = self._get_request_data(attachment, channel_name)
+        for webhook_url in provide_sequence(webhook_urls):
+            requests.post(webhook_url, json=request_data)
+
+    def send_notification(self, attachments_data):
+        all_attachments = []
+        for attachment_data in attachments_data:
+            slack_channel = attachment_data.observable_coin.slack_channel
+            discord_webhook_url = attachment_data.observable_coin.discord_webhook_url
+            if discord_webhook_url is not None:
+                self._send_notification([attachment_data], '', discord_webhook_url)
+            if slack_channel is not None:
+                self._send_notification([attachment_data], slack_channel, settings.SLACK_WEBHOOK_URL)
+
+            all_attachments.append(attachment_data)
+
+        webhook_urls = [w for w in self.DEFAULT_WEBHOOK_URLS if w is not NotImplemented]
+        self._send_notification(all_attachments, settings.CHANNEL_NAME, webhook_urls)
 
     def get_action(self, old_value, new_value):
         if old_value > new_value:
@@ -182,14 +207,6 @@ class Notifier(object):
             return 'has risen'
         else:
             raise ValueWasNotChanged('Value was not changed')
-
-    def send_notification(self, attachments_data):
-        attachments = [self._get_attachment(attachment_data) for attachment_data in attachments_data]
-        request_data = self._get_request_data(attachments)
-        for webhook_url in (settings.SLACK_WEBHOOK_URL, settings.DISCORD_WEBHOOK_URL):
-            if webhook_url is not NotImplemented:
-                requests.post(webhook_url, json=request_data)
-
 
 class AppRunner(object):
 
