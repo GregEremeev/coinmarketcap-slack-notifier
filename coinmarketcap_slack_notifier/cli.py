@@ -1,7 +1,9 @@
 import sys
+import logging
 
 import click
 
+from coinmarketcap_slack_notifier import settings
 from coinmarketcap_slack_notifier.core import AppRunner, Notifier, CoinManager
 
 
@@ -13,6 +15,7 @@ def commands_group():
 @click.command()
 def run_notifier():
     """Send notification about currency changes to the slack channel"""
+    logging.config.dictConfig(settings.LOGGING)
     AppRunner(notifier=Notifier(), coin_manager=CoinManager()).run()
 
 

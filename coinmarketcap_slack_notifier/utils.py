@@ -1,15 +1,8 @@
 import json
-from collections import namedtuple
-
 from decimal import Decimal
+from abc import ABCMeta, abstractmethod
 
-
-ObservableCoin = namedtuple('ObservableCoin', 'id icon_url percent slack_channel discord_webhook_url')
-StoredCoin = namedtuple('StoredCoin', 'id price_usd price_btc total_supply percent')
-ChangedCoin = namedtuple('ChangedCoin', 'id price_usd price_btc total_supply daily_volume')
-AttachmentData = namedtuple('AttachmentData', 'observable_coin coin_price_action coin_total_supply_action '
-                                              'new_price_usd new_price_btc daily_volume price_percent_change '
-                                              'coin_amount_change btc_percent_change')
+from coinmarketcap_slack_notifier import settings
 
 
 class ValueWasNotChanged(ValueError):
@@ -18,6 +11,10 @@ class ValueWasNotChanged(ValueError):
 
 class CoinDoesNotExist(Exception):
     pass
+
+
+def calculate_percent_changes(old_value, new_value):
+    return (abs(new_value - old_value) / old_value * 100).quantize(settings.QUANTIZE_PERCENT_AND_PRICE)
 
 
 def provide_sequence(obj):
@@ -30,5 +27,35 @@ def provide_sequence(obj):
 def json_dumps(data):
     def default(obj):
         if isinstance(obj, Decimal):
-            return float(obj)
+            return str(obj)
     return json.dumps(data, default=default)
+
+
+class BaseTriggerCondition(object):
+
+    __metaclass__ = ABCMeta
+
+    def __init__(self, value):
+        self.value = value
+
+    def _has_percent_changes_triggered(self, old_value, new_value):
+        if calculate_percent_changes(old_value, new_value) >= self.value:
+            return True
+        else:
+            return False
+
+    @abstractmethod
+    def has_condition_triggered(self, stored_coin, changed_coin):
+        pass
+
+
+class PercentUSDTriggerCondition(BaseTriggerCondition):
+
+    def has_condition_triggered(self, stored_coin, changed_coin):
+        return self._has_percent_changes_triggered(stored_coin.price_usd, changed_coin.price_usd)
+
+
+class TotalSupplyTriggerCondition(BaseTriggerCondition):
+
+    def has_condition_triggered(self, stored_coin, changed_coin):
+        return self._has_percent_changes_triggered(stored_coin.total_supply, changed_coin.total_supply)

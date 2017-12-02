@@ -31,10 +31,10 @@ DISCORD_WEBHOOK_URL = your_discord_webhook_url
 OBSERVABLE_COINS = [
     {'id': 'bitcoin', #you can choose which coins will be observable
      'icon_url': 'https://cdn3.iconfinder.com/data/icons/inficons-set-2/512/648849-star-ratings-512.png',
-     'percent': 5}, #and trigger condition
+     'trigger_conditions': [{'percent_price_usd': 0.1, 'percent_total_supply': 0.1}, {'percent_price_usd': 0.1}]}, #and trigger conditions
     {'id': 'litecoin',
      'icon_url': 'https://pngimg.com/uploads/litecoin/litecoin.png',
-     'percent': 0.1,
+     'trigger_conditions': [{'percent_price_usd': 5}],
      'slack_channel': 'general', #separate message about litecoin will be sent to this slack channel
      'discord_webhook_url': 'your_webhook_url'} #separate message about litecoin will be sent to this discord channel
 ]

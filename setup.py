@@ -14,7 +14,7 @@ setup(
     install_requires=requirements,
     description='Application which sends notifications about changes on coinmarketcap.com to the slack channel',
     packages=find_packages(),
-    extras_require={'dev': ['pdbpp==0.9.1']},
+    extras_require={'dev': ['ipdb==0.10.3']},
     classifiers=['Programming Language :: Python :: 2.7'],
     zip_safe=False,
     include_package_data=True
