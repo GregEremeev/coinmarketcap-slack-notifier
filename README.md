@@ -6,7 +6,7 @@
 
 #### Clone repository and install dependencies
 ```bash
-git clone https://github.com/Budulianin/coinmarketcap-slack-notifier.git
+git clone https://github.com/gregeremeev/coinmarketcap-slack-notifier.git
 cd coinmarketcap-slack-notifier
 virtualenv .venv
 source .venv/bin/activate
